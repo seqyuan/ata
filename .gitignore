@@ -1,5 +1,5 @@
 # Binaries
-parta
+/parta
 *.exe
 *.dll
 *.so
