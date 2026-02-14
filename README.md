@@ -6,6 +6,22 @@
 
 ---
 
+# Installation
+
+## Using go install (Recommended)
+```bash
+go install github.com/seqyuan/parta/cmd/parta@latest
+```
+
+This installs `parta` to your `$GOPATH/bin` or `$GOBIN` directory.
+
+## From source
+```bash
+git clone https://github.com/seqyuan/parta.git
+cd parta
+go build -o parta ./cmd/parta
+```
+
 # parta
 parrellel task, 任务多线程工具
 
@@ -26,12 +42,12 @@ parrellel task, 任务多线程工具
 ```
 -i  --infile  Work.sh, same as qsub_sge's input format
 -l  --line    Number of lines as a unit. Default: 1
--p  --thred   Thread process at same time. Default: 1
+-t  --thread   Thread process at same time. Default: 1
 ```
 
 ## 使用示例
 
-`./parta -i input.sh -l 2 -p 2`
+`parta -i input.sh -l 2 -t 2`
 
 标准错物流的输出：
 
@@ -89,8 +105,8 @@ echo 6
 ### -l
 依照`-i`参数的示例，一共有10行命令，比如我们想每2行作为1个单位并行的执行，那么`-l`参数设置为2
 
-### -p
-如果要对整个parta程序所在进程的资源做限制，可设置`-p`参数，指定最多同时并行多少个子进程
+### -t
+如果要对整个parta程序所在进程的资源做限制,可设置`-t`参数,指定最多同时并行多少个子进程
 
 ### parta产生的文件
 
@@ -100,7 +116,7 @@ echo 6
 
 
 ### 其他使用方式
-`./parta -i input.sh -l 2 -p 2`
+`parta -i input.sh -l 2 -t 2`
 
 我们可以把以上命令写入到`work.sh`里，然后把`work.sh`投递到SGE或者K8s计算节点
 
@@ -155,6 +171,3 @@ ENV PATH /opt:$PATH:/bin
 ```
 
 这样就能直接在docker容器内的命令行使用parta，而不必写绝对路径了
-
-# update
-export version="v1.4.0" && git add -A  && git commit -m $version && git push && git tag $version && git push origin $version
