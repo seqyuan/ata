@@ -15,7 +15,7 @@ builds:
       - linux
     goarch:
       - amd64
-    main: ./cmd/app/main.go
+    main: ./cmd/parta/main.go
     binary: parta
 
 archives:
