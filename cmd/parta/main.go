@@ -313,7 +313,7 @@ func main() {
 	parser := argparse.NewParser("parta", documents)
 	opt_i := parser.String("i", "infile", &argparse.Options{Required: true, Help: "Input shell command file (one command per line or grouped by -l)"})
 	opt_l := parser.Int("l", "line", &argparse.Options{Default: 1, Help: "Number of lines to group as one task (default: 1)"})
-	opt_p := parser.Int("p", "thread", &argparse.Options{Default: 1, Help: "Max concurrent tasks to run (default: 1)"})
+	opt_t := parser.Int("t", "thread", &argparse.Options{Default: 1, Help: "Max concurrent tasks to run (default: 1)"})
 	
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -325,6 +325,6 @@ func main() {
 	need2run := GetNeed2Run(dbObj)
 	fmt.Println(need2run)
 
-	IlterCommand(dbObj, *opt_p, need2run)
+	IlterCommand(dbObj, *opt_t, need2run)
 	CheckExitCode(dbObj)
 }
