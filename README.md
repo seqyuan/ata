@@ -9,8 +9,25 @@
 # Installation
 
 ## Using go install (Recommended)
+
+**注意**：`ata` 使用 SQLite3 数据库，依赖 CGO，安装时必须启用 CGO 并确保系统已安装 SQLite3 开发库。
+
+### Linux
 ```bash
-go install github.com/seqyuan/ata/cmd/ata@latest
+# 安装 SQLite3 开发库（如尚未安装）
+# Debian/Ubuntu:
+sudo apt-get install -y build-essential libsqlite3-dev
+# CentOS/RHEL:
+sudo yum install -y gcc sqlite-devel
+
+# 安装 ata
+CGO_ENABLED=1 go install github.com/seqyuan/ata/cmd/ata@latest
+```
+
+### macOS
+```bash
+# macOS 自带 SQLite3，直接安装即可
+CGO_ENABLED=1 go install github.com/seqyuan/ata/cmd/ata@latest
 ```
 
 This installs `ata` to your `$GOPATH/bin` or `$GOBIN` directory.
@@ -19,7 +36,7 @@ This installs `ata` to your `$GOPATH/bin` or `$GOBIN` directory.
 ```bash
 git clone https://github.com/seqyuan/ata.git
 cd ata
-go build -o ata ./cmd/ata
+CGO_ENABLED=1 go build -o ata ./cmd/ata
 ```
 
 # ata
@@ -35,6 +52,7 @@ parallel task, 任务多线程工具
 4. 所有并行执行的子进程相互独立，互不影响
 5. 如果并行执行的任意一个子进程退出码非0，最终ata 也是非0退出
 6. ata会统计成功运行子脚本数量以及运行失败子脚本数量输出到stdout，如果有运行失败的脚本会输出到ata的stderr
+7. 兼容 [annotask](https://github.com/seqyuan/annotask) 的数据库格式，可直接处理 annotask 产生的任务
 
 # 使用方法
 
@@ -57,8 +75,8 @@ All works: 5
 Successed: 3
 Error: 2
 Err Shells:
-2	/Volumes/RD/parallel_task/input.sh.shell/work_000002.sh
-3	/Volumes/RD/parallel_task/input.sh.shell/work_000003.sh
+2	/Volumes/RD/parallel_task/input.sh.shell/task_0002.sh
+3	/Volumes/RD/parallel_task/input.sh.shell/task_0003.sh
 ```
 
 运行产生的目录结构：
@@ -67,24 +85,24 @@ Err Shells:
 ├── input.sh
 ├── input.sh.db
 └── input.sh.shell
-    ├── work_000001.sh
-    ├── work_000001.sh.e
-    ├── work_000001.sh.o
-    ├── work_000001.sh.sign
-    ├── work_000002.sh
-    ├── work_000002.sh.e
-    ├── work_000002.sh.o
-    ├── work_000003.sh
-    ├── work_000003.sh.e
-    ├── work_000003.sh.o
-    ├── work_000004.sh
-    ├── work_000004.sh.e
-    ├── work_000004.sh.o
-    ├── work_000004.sh.sign
-    ├── work_000005.sh
-    ├── work_000005.sh.e
-    ├── work_000005.sh.o
-    └── work_000005.sh.sign
+    ├── task_0001.sh
+    ├── task_0001.sh.e
+    ├── task_0001.sh.o
+    ├── task_0001.sh.sign
+    ├── task_0002.sh
+    ├── task_0002.sh.e
+    ├── task_0002.sh.o
+    ├── task_0003.sh
+    ├── task_0003.sh.e
+    ├── task_0003.sh.o
+    ├── task_0004.sh
+    ├── task_0004.sh.e
+    ├── task_0004.sh.o
+    ├── task_0004.sh.sign
+    ├── task_0005.sh
+    ├── task_0005.sh.e
+    ├── task_0005.sh.o
+    └── task_0005.sh.sign
 ```
 
 ### -i
@@ -112,7 +130,7 @@ echo 6
 
 1. `input.sh.db`文件，此文件为sqlite数据库
 2. `input.sh.shell`目录，`prefix`即为`-i`参数的值，例如-i参数为work.sh，则产生work.sh,shell目录
-3. 按照`-l`参数切割的input.sh的子脚本，存放在`input.sh.shell`目录，以**work_000**作为子脚本的前缀，例如`-l`参数为3，则把input.sh从第一行命令开始，每3行写入到work_000前缀命名的子脚本中
+3. 按照`-l`参数切割的input.sh的子脚本，存放在`input.sh.shell`目录，以**task_**作为子脚本的前缀，例如`-l`参数为3，则把input.sh从第一行命令开始，每3行写入到task_前缀命名的子脚本中
 
 
 ### 其他使用方式

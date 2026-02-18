@@ -128,7 +128,7 @@ func Creat_tb(shell_path string, line_unit int)(dbObj *MySql) {
 			CheckErr(err)
 			if CheckCount(Nrows)==0 {
 				cmd_l = strings.TrimRight(cmd_l, "\n")
-				subShell := subShellPath + "/work_" + strings.Repeat("0", 6-len(strconv.Itoa(N))) + strconv.Itoa(N) + ".sh"
+				subShell := subShellPath + "/task_" + strings.Repeat("0", 4-len(strconv.Itoa(N))) + strconv.Itoa(N) + ".sh"
 				GenerateShell(subShell, cmd_l)
 				_, _ = insert_job.Exec(N, subShell, J_pending, 0)
 			}
@@ -145,7 +145,7 @@ func Creat_tb(shell_path string, line_unit int)(dbObj *MySql) {
 		CheckErr(err)
 		if CheckCount(Nrows)==0 {
 			cmd_l = strings.TrimRight(cmd_l, "\n")
-			subShell := subShellPath + "/work_" + strings.Repeat("0", 6-len(strconv.Itoa(N))) + strconv.Itoa(N) + ".sh"
+			subShell := subShellPath + "/task_" + strings.Repeat("0", 4-len(strconv.Itoa(N))) + strconv.Itoa(N) + ".sh"
 			GenerateShell(subShell, cmd_l)
 			_, _ = insert_job.Exec(N, subShell, J_pending, 0)
 		}
@@ -154,6 +154,29 @@ func Creat_tb(shell_path string, line_unit int)(dbObj *MySql) {
 	err = tx.Commit()
 	CheckErr(err)
 	return
+}
+
+func RecoverBySign(dbObj *MySql) {
+	rows, err := dbObj.Db.Query("select subJob_num, shellPath from job where status!=?", J_finished)
+	CheckErr(err)
+	defer rows.Close()
+
+	var updates []int
+	for rows.Next() {
+		var subJobNum int
+		var shellPath string
+		err := rows.Scan(&subJobNum, &shellPath)
+		CheckErr(err)
+		signPath := shellPath + ".sign"
+		if _, err := os.Stat(signPath); err == nil {
+			updates = append(updates, subJobNum)
+		}
+	}
+
+	for _, n := range updates {
+		_, err := dbObj.Db.Exec("UPDATE job set status=?, exitCode=0 where subJob_num=?", J_finished, n)
+		CheckErr(err)
+	}
 }
 
 func GetNeed2Run(dbObj *MySql)([]int){
@@ -300,7 +323,7 @@ func CheckExitCode(dbObj *MySql){
 	os.Exit(exitCode)
 }
 
-var documents string = `任务并发程序 parallel task v1.5.0`
+var documents string = `任务并发程序 parallel task v1.6.0`
 
 func CheckErr(err error) {
 	if err != nil {
@@ -322,6 +345,7 @@ func main() {
 	}
 
 	dbObj := Creat_tb(*opt_i, *opt_l)
+	RecoverBySign(dbObj)
 	need2run := GetNeed2Run(dbObj)
 	fmt.Println(need2run)
 
