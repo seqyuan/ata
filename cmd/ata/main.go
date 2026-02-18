@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"database/sql"
 	"fmt"
-	"github.com/seqyuan/parta/pkg/gpool"
+	"github.com/seqyuan/ata/pkg/gpool"
 	"github.com/akamensky/argparse"
 	_ "github.com/mattn/go-sqlite3"
 	"io"
@@ -300,7 +300,7 @@ func CheckExitCode(dbObj *MySql){
 	os.Exit(exitCode)
 }
 
-var documents string = `任务并发程序 parrell task v1.4.1`
+var documents string = `任务并发程序 parallel task v1.5.0`
 
 func CheckErr(err error) {
 	if err != nil {
@@ -310,7 +310,7 @@ func CheckErr(err error) {
 
 
 func main() {
-	parser := argparse.NewParser("parta", documents)
+	parser := argparse.NewParser("ata", documents)
 	opt_i := parser.String("i", "infile", &argparse.Options{Required: true, Help: "Input shell command file (one command per line or grouped by -l)"})
 	opt_l := parser.Int("l", "line", &argparse.Options{Default: 1, Help: "Number of lines to group as one task (default: 1)"})
 	opt_t := parser.Int("t", "thread", &argparse.Options{Default: 1, Help: "Max concurrent tasks to run (default: 1)"})

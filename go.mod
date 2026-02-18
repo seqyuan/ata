@@ -1,4 +1,4 @@
-module github.com/seqyuan/parta
+module github.com/seqyuan/ata
 
 go 1.22.2
 
