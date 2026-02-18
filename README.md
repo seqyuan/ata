@@ -129,7 +129,7 @@ echo 6
 ### ata产生的文件
 
 1. `input.sh.db`文件，此文件为sqlite数据库
-2. `input.sh.shell`目录，`prefix`即为`-i`参数的值，例如-i参数为work.sh，则产生work.sh,shell目录
+2. `input.sh.shell`目录，`prefix`即为`-i`参数的值，例如-i参数为input.sh，则产生input.sh.shell目录
 3. 按照`-l`参数切割的input.sh的子脚本，存放在`input.sh.shell`目录，以**task_**作为子脚本的前缀，例如`-l`参数为3，则把input.sh从第一行命令开始，每3行写入到task_前缀命名的子脚本中
 
 
