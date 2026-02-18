@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"database/sql"
 	"fmt"
 	"github.com/seqyuan/ata/pkg/gpool"
@@ -14,10 +15,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	//"sync"
+	"sync"
 	"syscall"
 	"time"
-	//"time"
 )
 
 type MySql struct {
@@ -323,7 +323,16 @@ func CheckExitCode(dbObj *MySql){
 	os.Exit(exitCode)
 }
 
-var documents string = `任务并发程序 parallel task v1.6.0`
+func getFinishedCount(dbObj *MySql) int {
+	var count int
+	err := dbObj.Db.QueryRow("SELECT COUNT(*) FROM job WHERE status=?", J_finished).Scan(&count)
+	if err != nil {
+		return 0
+	}
+	return count
+}
+
+var documents string = `任务并发程序 parallel task v1.6.1`
 
 func CheckErr(err error) {
 	if err != nil {
@@ -349,6 +358,23 @@ func main() {
 	need2run := GetNeed2Run(dbObj)
 	fmt.Println(need2run)
 
+	// Start monitor goroutine to write input.sh.log
+	shellAbsName, _ := filepath.Abs(*opt_i)
+	command := strings.Join(os.Args, " ")
+	finishedCount := getFinishedCount(dbObj)
+	isResume := finishedCount > 0
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var monitorWg sync.WaitGroup
+	monitorWg.Add(1)
+	go func() {
+		defer monitorWg.Done()
+		MonitorTaskStatus(ctx, dbObj, shellAbsName, command, isResume, finishedCount)
+	}()
+
 	IlterCommand(dbObj, *opt_t, need2run)
+	cancel()
+	monitorWg.Wait()
+
 	CheckExitCode(dbObj)
 }
