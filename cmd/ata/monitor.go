@@ -121,7 +121,7 @@ func MonitorTaskStatus(ctx context.Context, dbObj *MySql, shellPath string, comm
 
 		if !headerPrinted {
 			logMutex.Lock()
-			fmt.Fprintf(logFile, "%-6s %-10s %-8s %-12s\n", "task", "status", "exitcode", "time")
+			fmt.Fprintf(logFile, "%-6s %-10s %-8s %-12s %-12s\n", "task", "status", "exitcode", "start", "end")
 			logFile.Sync()
 			logMutex.Unlock()
 			headerPrinted = true
@@ -184,17 +184,18 @@ func outputTaskStatus(logFile *os.File, logMutex *sync.Mutex, ts TaskStatus) {
 		exitCodeStr = "-"
 	}
 
-	var timeStr string
+	startTimeStr := "-"
+	if ts.starttime.Valid {
+		startTimeStr = formatTimeShort(ts.starttime.String)
+	}
+
+	endTimeStr := "-"
 	if ts.endtime.Valid {
-		timeStr = formatTimeShort(ts.endtime.String)
-	} else if ts.starttime.Valid {
-		timeStr = formatTimeShort(ts.starttime.String)
-	} else {
-		timeStr = "-"
+		endTimeStr = formatTimeShort(ts.endtime.String)
 	}
 
 	logMutex.Lock()
 	defer logMutex.Unlock()
-	fmt.Fprintf(logFile, "%-6s %-10s %-8s %-12s\n", taskNumStr, ts.status, exitCodeStr, timeStr)
+	fmt.Fprintf(logFile, "%-6s %-10s %-8s %-12s %-12s\n", taskNumStr, ts.status, exitCodeStr, startTimeStr, endTimeStr)
 	logFile.Sync()
 }

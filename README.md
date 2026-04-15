@@ -70,7 +70,6 @@ parallel task, 任务多线程工具
 标准错物流的输出：
 
 ```
-[1 2 3 4 5]
 All works: 5
 Successed: 3
 Error: 2
@@ -84,6 +83,7 @@ Err Shells:
 .
 ├── input.sh
 ├── input.sh.db
+├── input.sh.log
 └── input.sh.shell
     ├── task_0001.sh
     ├── task_0001.sh.e
@@ -129,8 +129,9 @@ echo 6
 ### ata产生的文件
 
 1. `input.sh.db`文件，此文件为sqlite数据库
-2. `input.sh.shell`目录，`prefix`即为`-i`参数的值，例如-i参数为input.sh，则产生input.sh.shell目录
-3. 按照`-l`参数切割的input.sh的子脚本，存放在`input.sh.shell`目录，以**task_**作为子脚本的前缀，例如`-l`参数为3，则把input.sh从第一行命令开始，每3行写入到task_前缀命名的子脚本中
+2. `input.sh.log`文件，记录任务状态变化以及对应的开始/结束时间
+3. `input.sh.shell`目录，`prefix`即为`-i`参数的值，例如-i参数为input.sh，则产生input.sh.shell目录
+4. 按照`-l`参数切割的input.sh的子脚本，存放在`input.sh.shell`目录，以**task_**作为子脚本的前缀，例如`-l`参数为3，则把input.sh从第一行命令开始，每3行写入到task_前缀命名的子脚本中
 
 
 ### 其他使用方式

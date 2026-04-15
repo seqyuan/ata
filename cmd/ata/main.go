@@ -5,9 +5,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/seqyuan/ata/pkg/gpool"
 	"github.com/akamensky/argparse"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/seqyuan/ata/pkg/gpool"
 	"io"
 	"log"
 	"os"
@@ -21,10 +21,10 @@ import (
 )
 
 type MySql struct {
-	Db	*sql.DB
+	Db *sql.DB
 }
 
-func (sqObj *MySql)Crt_tb() {
+func (sqObj *MySql) Crt_tb() {
 	// create table if not exists
 	sql_job_table := `
 	CREATE TABLE IF NOT EXISTS job(
@@ -44,22 +44,20 @@ func (sqObj *MySql)Crt_tb() {
 	}
 }
 
-
 type jobStatusType string
 
 // These are project or module type.
 const (
-	J_pending    jobStatusType = "Pending"
-	J_failed    jobStatusType = "Failed"
+	J_pending  jobStatusType = "Pending"
+	J_failed   jobStatusType = "Failed"
 	J_running  jobStatusType = "Running"
-	J_finished  jobStatusType = "Finished"
+	J_finished jobStatusType = "Finished"
 )
-
 
 func CheckCount(rows *sql.Rows) (count int) {
 	count = 0
 	for rows.Next() {
-		count ++
+		count++
 	}
 	if err := rows.Err(); err != nil {
 		panic(err)
@@ -67,7 +65,11 @@ func CheckCount(rows *sql.Rows) (count int) {
 	return count
 }
 
-func GenerateShell(shellPath, content  string) {
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
+}
+
+func GenerateShell(shellPath, content string) {
 	fi, err := os.Create(shellPath)
 	if err != nil {
 		panic(err)
@@ -75,14 +77,21 @@ func GenerateShell(shellPath, content  string) {
 	defer fi.Close()
 
 	content = strings.TrimRight(content, "\n")
-	content = fmt.Sprintf("#!/bin/bash\necho ========== start at : `date +%%Y/%%m/%%d %%H:%%M:%%S` ==========\n%s",content)
-	content = fmt.Sprintf("%s && \\\necho ========== end at : `date +%%Y/%%m/%%d %%H:%%M:%%S` ========== && \\\n",content)
-	content = fmt.Sprintf("%secho LLAP 1>&2 && \\\necho LLAP > %s.sign\n", content, shellPath)
+	signPath := shellQuote(shellPath + ".sign")
+	script := fmt.Sprintf(`#!/usr/bin/env bash
+set -e
+printf '========== start at : %%s ==========\n' "$(date '+%%Y/%%m/%%d %%H:%%M:%%S')"
+%s
+printf '========== end at : %%s ==========\n' "$(date '+%%Y/%%m/%%d %%H:%%M:%%S')"
+printf '%%s\n' LLAP 1>&2
+printf '%%s\n' LLAP > %s
+`, content, signPath)
 
-	_, err = fi.Write([]byte(content))
+	_, err = fi.Write([]byte(script))
+	CheckErr(err)
 }
 
-func Creat_tb(shell_path string, line_unit int)(dbObj *MySql) {
+func Creat_tb(shell_path string, line_unit int) (dbObj *MySql) {
 	shellAbsName, _ := filepath.Abs(shell_path)
 	dbpath := shellAbsName + ".db"
 	subShellPath := shellAbsName + ".shell"
@@ -104,51 +113,61 @@ func Creat_tb(shell_path string, line_unit int)(dbObj *MySql) {
 	if err != nil {
 		panic(err)
 	}
+	defer f.Close()
 	buf := bufio.NewReader(f)
 
 	ii := 0
 	var cmd_l string = ""
 	N := 0
+
+	writeTask := func(subJobNum int, command string) {
+		var existingID int
+		err := tx.QueryRow("select Id from job where subJob_num = ?", subJobNum).Scan(&existingID)
+		if err == nil {
+			return
+		}
+		if err != sql.ErrNoRows {
+			CheckErr(err)
+		}
+
+		command = strings.TrimRight(command, "\n")
+		subShell := subShellPath + "/task_" + strings.Repeat("0", 4-len(strconv.Itoa(subJobNum))) + strconv.Itoa(subJobNum) + ".sh"
+		GenerateShell(subShell, command)
+		_, err = insert_job.Exec(subJobNum, subShell, J_pending, 0)
+		CheckErr(err)
+	}
+
 	for {
 		line, err := buf.ReadString('\n')
-		if err != nil || err == io.EOF {
+		if err != nil && err != io.EOF {
+			CheckErr(err)
+		}
+		if len(line) == 0 && err == io.EOF {
 			break
 		}
 
-		if ii == 0{
+		if ii == 0 {
 			cmd_l = line
 			ii++
-		}else if ii < line_unit{
+		} else if ii < line_unit {
 			cmd_l = cmd_l + line
 			ii++
-		}else{
+		} else {
 			N++
-			Nrows, err := tx.Query("select Id from job where subJob_num = ?", N)
-			defer Nrows.Close()
-			CheckErr(err)
-			if CheckCount(Nrows)==0 {
-				cmd_l = strings.TrimRight(cmd_l, "\n")
-				subShell := subShellPath + "/task_" + strings.Repeat("0", 4-len(strconv.Itoa(N))) + strconv.Itoa(N) + ".sh"
-				GenerateShell(subShell, cmd_l)
-				_, _ = insert_job.Exec(N, subShell, J_pending, 0)
-			}
+			writeTask(N, cmd_l)
 
 			ii = 1
 			cmd_l = line
 		}
+
+		if err == io.EOF {
+			break
+		}
 	}
 
-	if ii > 0{
+	if ii > 0 {
 		N++
-		Nrows, err := tx.Query("select Id from job where subJob_num = ?", N)
-		defer Nrows.Close()
-		CheckErr(err)
-		if CheckCount(Nrows)==0 {
-			cmd_l = strings.TrimRight(cmd_l, "\n")
-			subShell := subShellPath + "/task_" + strings.Repeat("0", 4-len(strconv.Itoa(N))) + strconv.Itoa(N) + ".sh"
-			GenerateShell(subShell, cmd_l)
-			_, _ = insert_job.Exec(N, subShell, J_pending, 0)
-		}
+		writeTask(N, cmd_l)
 	}
 
 	err = tx.Commit()
@@ -161,25 +180,33 @@ func RecoverBySign(dbObj *MySql) {
 	CheckErr(err)
 	defer rows.Close()
 
-	var updates []int
+	type recoveredTask struct {
+		subJobNum int
+		endtime   string
+	}
+
+	var updates []recoveredTask
 	for rows.Next() {
 		var subJobNum int
 		var shellPath string
 		err := rows.Scan(&subJobNum, &shellPath)
 		CheckErr(err)
 		signPath := shellPath + ".sign"
-		if _, err := os.Stat(signPath); err == nil {
-			updates = append(updates, subJobNum)
+		if info, err := os.Stat(signPath); err == nil {
+			updates = append(updates, recoveredTask{
+				subJobNum: subJobNum,
+				endtime:   info.ModTime().Format("2006-01-02 15:04:05"),
+			})
 		}
 	}
 
-	for _, n := range updates {
-		_, err := dbObj.Db.Exec("UPDATE job set status=?, exitCode=0 where subJob_num=?", J_finished, n)
+	for _, task := range updates {
+		_, err := dbObj.Db.Exec("UPDATE job set status=?, endtime=?, exitCode=0 where subJob_num=?", J_finished, task.endtime, task.subJobNum)
 		CheckErr(err)
 	}
 }
 
-func GetNeed2Run(dbObj *MySql)([]int){
+func GetNeed2Run(dbObj *MySql) []int {
 	//need2run := make(map[int]int)
 	tx, _ := dbObj.Db.Begin()
 	defer tx.Rollback()
@@ -205,41 +232,38 @@ func GetNeed2Run(dbObj *MySql)([]int){
 	return need2run
 }
 
-func IlterCommand(dbObj *MySql, thred int, need2run []int){
+func IlterCommand(dbObj *MySql, thred int, need2run []int) {
 	pool := gpool.New(thred)
-	write_pool := gpool.New(1)
+	var writeMu sync.Mutex
 
-	for _, N := range need2run{
+	for _, N := range need2run {
 		pool.Add(1)
-		go RunCommand(N, pool, dbObj, write_pool)
+		go RunCommand(N, pool, dbObj, &writeMu)
 	}
 
-	write_pool.Wait()
 	pool.Wait()
 }
 
-
-func RunCommand(N int, pool *gpool.Pool, dbObj *MySql, write_pool *gpool.Pool){
-	tx, _ := dbObj.Db.Begin()
-	defer tx.Rollback()
+func RunCommand(N int, pool *gpool.Pool, dbObj *MySql, writeMu *sync.Mutex) {
+	defer pool.Done()
 
 	var subShellPath string
 	err := dbObj.Db.QueryRow("select shellPath from job where subJob_num = ?", N).Scan(&subShellPath)
 	CheckErr(err)
 
 	now := time.Now().Format("2006-01-02 15:04:05")
-	write_pool.Add(1)
-	_, err = dbObj.Db.Exec("UPDATE job set status=?, starttime=? where subJob_num=?", J_running, now, N)
+	writeMu.Lock()
+	_, err = dbObj.Db.Exec("UPDATE job set status=?, starttime=?, endtime=NULL, exitCode=NULL where subJob_num=?", J_running, now, N)
+	writeMu.Unlock()
 	CheckErr(err)
-	write_pool.Done()
 
 	defaultFailedCode := 1
-	cmd := exec.Command("sh", subShellPath)
+	cmd := exec.Command("bash", subShellPath)
 	// 其他程序stdout stderr改到当前目录pwd
-	sho, err := os.OpenFile(fmt.Sprintf("%s.o", subShellPath), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0755)
+	sho, err := os.OpenFile(fmt.Sprintf("%s.o", subShellPath), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	CheckErr(err)
 	defer sho.Close()
-	she, err := os.OpenFile(fmt.Sprintf("%s.e", subShellPath), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0755)
+	she, err := os.OpenFile(fmt.Sprintf("%s.e", subShellPath), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	CheckErr(err)
 	defer she.Close()
 	Owriter := io.MultiWriter(sho)
@@ -267,46 +291,46 @@ func RunCommand(N int, pool *gpool.Pool, dbObj *MySql, write_pool *gpool.Pool){
 
 	//var lock sync.Mutex //互斥锁
 	//lock.Lock()
-	write_pool.Add(1)
+	writeMu.Lock()
 	now = time.Now().Format("2006-01-02 15:04:05")
-	if exitCode == 0{
+	if exitCode == 0 {
 		//update_job_end.Exec(J_finished, now, N)
 		_, err = dbObj.Db.Exec("UPDATE job set status=?, endtime=?, exitCode=? where subJob_num=?", J_finished, now, exitCode, N)
 
-	}else{
+	} else {
 		_, err = dbObj.Db.Exec("UPDATE job set status=?, endtime=?, exitCode=? where subJob_num=?", J_failed, now, exitCode, N)
 
 	}
 
-	write_pool.Done()
-	//lock.Unlock() //解锁
+	writeMu.Unlock()
 
 	//err = tx.Commit()
 	CheckErr(err)
-	pool.Done()
 }
 
-func CheckExitCode(dbObj *MySql){
+func CheckExitCode(dbObj *MySql) {
 	tx, _ := dbObj.Db.Begin()
 	defer tx.Rollback()
 
-	rows1, err := tx.Query("select subJob_num, shellPath from job where exitCode!=0")
+	var totalCount int
+	err := tx.QueryRow("select count(*) from job").Scan(&totalCount)
 	CheckErr(err)
-	defer rows1.Close()
+
+	var successCount int
+	err = tx.QueryRow("select count(*) from job where exitCode=0").Scan(&successCount)
+	CheckErr(err)
+
+	var errorCount int
+	err = tx.QueryRow("select count(*) from job where exitCode!=0").Scan(&errorCount)
+	CheckErr(err)
+
 	rows12, err := tx.Query("select subJob_num, shellPath from job where exitCode!=0")
 	CheckErr(err)
 	defer rows12.Close()
 
-	rows0, err := tx.Query("select exitCode from job where exitCode==0")
-	CheckErr(err)
-	defer rows0.Close()
-
-	SuccessCount := CheckCount(rows0)
-	ErrorCount := CheckCount(rows1)
-
 	exitCode := 0
-	os.Stderr.WriteString(fmt.Sprintf("All works: %v\nSuccessed: %v\nError: %v\n", SuccessCount+ErrorCount, SuccessCount, ErrorCount))
-	if ErrorCount >0 {
+	os.Stderr.WriteString(fmt.Sprintf("All works: %v\nSuccessed: %v\nError: %v\n", totalCount, successCount, errorCount))
+	if errorCount > 0 {
 		exitCode = 1
 		os.Stderr.WriteString("Err Shells:\n")
 	}
@@ -314,7 +338,6 @@ func CheckExitCode(dbObj *MySql){
 	var subJob_num int
 	var shellPath string
 	for rows12.Next() {
-		ErrorCount++
 		err := rows12.Scan(&subJob_num, &shellPath)
 		CheckErr(err)
 		os.Stderr.WriteString(fmt.Sprintf("%v\t%s\n", subJob_num, shellPath))
@@ -332,7 +355,7 @@ func getFinishedCount(dbObj *MySql) int {
 	return count
 }
 
-var documents string = `任务并发程序 parallel task v1.6.1`
+var documents string = `任务并发程序 parallel task v1.6.2`
 
 func CheckErr(err error) {
 	if err != nil {
@@ -340,23 +363,27 @@ func CheckErr(err error) {
 	}
 }
 
-
 func main() {
 	parser := argparse.NewParser("ata", documents)
 	opt_i := parser.String("i", "infile", &argparse.Options{Required: true, Help: "Input shell command file (one command per line or grouped by -l)"})
 	opt_l := parser.Int("l", "line", &argparse.Options{Default: 1, Help: "Number of lines to group as one task (default: 1)"})
 	opt_t := parser.Int("t", "thread", &argparse.Options{Default: 1, Help: "Max concurrent tasks to run (default: 1)"})
-	
+
 	err := parser.Parse(os.Args)
 	if err != nil {
 		fmt.Print(parser.Usage(err))
 		return
 	}
+	if *opt_l <= 0 {
+		log.Fatal("-l must be >= 1")
+	}
+	if *opt_t <= 0 {
+		log.Fatal("-t must be >= 1")
+	}
 
 	dbObj := Creat_tb(*opt_i, *opt_l)
 	RecoverBySign(dbObj)
 	need2run := GetNeed2Run(dbObj)
-	fmt.Println(need2run)
 
 	// Start monitor goroutine to write input.sh.log
 	shellAbsName, _ := filepath.Abs(*opt_i)
